@@ -2,9 +2,16 @@ import gymnasium as gym
 from learn_rl.environment._base import Environment
 
 
-class AcrobotEnv(Environment):
-    def __init__(self, render_mode: str | None = None) -> None:
-        self.env = gym.make("Acrobot-v1", render_mode=render_mode)
+class FrozenLakeEnv(Environment):
+    def __init__(
+        self, map_name="4x4", is_slippery=False, render_mode: str | None = None
+    ):
+        self.env = gym.make(
+            "FrozenLake-v1",
+            map_name=map_name,
+            is_slippery=is_slippery,
+            render_mode=render_mode,
+        )
 
     def reset(self):
         observation, info = self.env.reset()
