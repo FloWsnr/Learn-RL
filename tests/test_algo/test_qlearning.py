@@ -44,15 +44,15 @@ def test_update_q_table():
 
 def test_train():
     env = FrozenLakeEnv(render_mode=None)
-    qlearning = QLearning(env=env, alpha=0.01, gamma=0.99)
-    qlearning.train(num_episodes=1000)
+    qlearning = QLearning(env=env, alpha=0.001, gamma=0.999)
+    qlearning.train(num_episodes=10000)
     assert True
 
 
 def test_infer():
     env = FrozenLakeEnv()
-    qlearning = QLearning(env=env, alpha=0.001, gamma=0.99)
-    qlearning.train(num_episodes=1000)
+    qlearning = QLearning(env=env, alpha=0.1, gamma=0.99)
+    qlearning.train(num_episodes=10000)
 
     new_env = FrozenLakeEnv(render_mode="human")
     qlearning.env = new_env
