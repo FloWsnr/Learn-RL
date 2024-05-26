@@ -2,6 +2,7 @@
 
 from collections import deque, namedtuple
 import torch
+from torch import Tensor
 from learn_rl.algo._base import AlgoBase
 from learn_rl.environment._base import Environment
 
@@ -21,7 +22,7 @@ class DQN_policy(torch.nn.Module):
             torch.nn.Linear(self.hidden_dim, self.action_dim),
         )
 
-    def forward(self, state: torch.Tensor) -> torch.Tensor:
+    def forward(self, state: Tensor) -> Tensor:
         return self.model(state)
 
 
@@ -37,18 +38,28 @@ class ReplayBuffer:
 
     def push(
         self,
-        state: int,
-        action: int,
-        reward: float,
-        next_state: int,
+        state: Tensor,
+        action: Tensor,
+        reward: Tensor,
+        next_state: Tensor,
         done: bool,
     ) -> None:
         experience = self.Experience(state, action, reward, next_state, done)
         self.buffer.append(experience)
 
-    def sample(self, batch_size: int) -> deque:
+    def sample(self, batch_size: int) -> tuple[torch.Tensor]:
         rand_indices = torch.randint(len(self.buffer), size=(batch_size,))
-        return self.buffer[rand_indices]
+        transitions = [self.buffer[index] for index in rand_indices]
+        return self._transitions_to_tensors(transitions)
+
+    def _transitions_to_tensors(self, transition: list[tuple]) -> tuple[torch.Tensor]:
+        states, actions, rewards, next_states, dones = zip(*transition)
+        states = torch.stack(states, dim=0)
+        actions = torch.stack(actions, dim=0)
+        rewards = torch.stack(rewards, dim=0)
+        next_states = torch.stack(next_states, dim=0)
+        dones = torch.tensor(dones, dtype=torch.bool)
+        return states, actions, rewards, next_states, dones
 
 
 class DQN(AlgoBase):
@@ -98,6 +109,9 @@ class DQN(AlgoBase):
                 )
 
                 ############## Training ###############
+                transitions = self.replay_buffer.sample(32)
+                state, action, reward, next_state, done = zip(*transitions)
+
                 td_target = reward + self.gamma * self.network(next_state).max()
                 td_error = td_target - self.network(state)[action]
 
