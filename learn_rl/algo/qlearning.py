@@ -4,7 +4,6 @@ Simple Q-Learning (with Q table) algorithm
 
 from pathlib import Path
 import numpy as np
-import gymnasium as gym
 
 from learn_rl.environment._base import Environment
 
