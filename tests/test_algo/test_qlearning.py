@@ -50,11 +50,24 @@ def test_train():
 
 
 def test_infer():
-    env = FrozenLakeEnv()
-    qlearning = QLearning(env=env, alpha=0.1, gamma=0.99)
-    qlearning.train(num_episodes=10000)
+    alpha = 0.1
+    gamma = 0.99
+    is_slippery = False
+    eps_0 = 1.0
+    eps_decay = 0.99
+    train_episodes = 10000
 
-    new_env = FrozenLakeEnv(render_mode="human")
+    env = FrozenLakeEnv(is_slippery=is_slippery)
+    qlearning = QLearning(
+        env=env,
+        alpha=alpha,
+        gamma=gamma,
+        eps_0=eps_0,
+        eps_decay=eps_decay,
+    )
+    qlearning.train(num_episodes=train_episodes)
+
+    new_env = FrozenLakeEnv(render_mode=None, is_slippery=is_slippery)
     qlearning.env = new_env
     qlearning.infer(num_episodes=100)
 

@@ -13,7 +13,7 @@ class QLearning:
     def __init__(
         self,
         env: Environment,
-        alpha: float = 0.5,
+        alpha: float = 0.1,
         gamma: float = 0.99,
         eps_0: float = 1.0,
         eps_decay: float = 0.99,
