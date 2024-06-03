@@ -63,13 +63,25 @@ class ReplayBuffer:
 
 
 class DQN(AlgoBase):
-    def __init__(self, env: Environment, network: DQN_policy):
+    def __init__(
+        self,
+        env: Environment,
+        network: DQN_policy,
+        optimizer: torch.optim.Optimizer,
+        **kwargs,
+    ):
         self.env = env
         self.num_states = env.state_space_size
         self.num_actions = env.action_space_size
 
+        self.gamma = kwargs.get("gamma", 0.99)
+        self.eps = kwargs.get("epsilon", 0.1)
+        self.buffer_size = kwargs.get("buffer_size", 1000)
+        self.sample_size = kwargs.get("sample_size", 32)
+
         self.network = network
-        self.replay_buffer = ReplayBuffer(1000)
+        self.optimizer = optimizer
+        self.replay_buffer = ReplayBuffer(self.buffer_size)
 
     def _loss(self):
         pass
@@ -78,7 +90,7 @@ class DQN(AlgoBase):
         pass
 
     def eps_greedy_policy(self, state, epsilon: float):
-        if torch.rand() < epsilon:
+        if torch.rand(1) < epsilon:
             # Random action
             return torch.randint(self.num_actions, (1,))
         else:
@@ -87,13 +99,15 @@ class DQN(AlgoBase):
                 return torch.argmax(self.network(state))
 
     def train(self, num_episodes: int = 1000):
+        self.network.train()
+
         for _ in range(num_episodes):
             self.env.reset()
             state = self.env.observation
             done = False
             while not done:
                 ############# Sampling ################
-                action = self.eps_greedy_policy(state, 0.1)
+                action = self.eps_greedy_policy(state, self.eps)
                 self.env.step(action)
 
                 next_state = self.env.observation
@@ -109,18 +123,16 @@ class DQN(AlgoBase):
                 )
 
                 ############## Training ###############
-                transitions = self.replay_buffer.sample(32)
+                transitions = self.replay_buffer.sample(self.sample_size)
                 state, action, reward, next_state, done = zip(*transitions)
 
                 td_target = reward + self.gamma * self.network(next_state).max()
                 td_error = td_target - self.network(state)[action]
 
-                self.network.train()
+                # Update network
                 self.optimizer.zero_grad()
 
-                loss = torch.nn.functional.smooth_l1_loss(
-                    td_target, self.network(state)[action]
-                )
+                loss = torch.nn.functional.smooth_l1_loss(td_error)
 
                 loss.backward()
                 self.optimizer.step()

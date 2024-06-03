@@ -1,5 +1,6 @@
 import torch
 from learn_rl.algo.dqn import ReplayBuffer, DQN, DQN_policy
+from learn_rl.environment.acrobot import AcrobotEnv
 
 
 class TestReplayBuffer:
@@ -41,3 +42,23 @@ class TestDQN_policy:
         state = torch.rand(1, 10)
         action = policy(state)
         assert action.shape == (1, 3)
+
+
+class TestDQN:
+    def test_eps_greedy_policy(self):
+        env = AcrobotEnv(render_mode=None)
+        policy = DQN_policy(state_dim=10, hidden_dim=20, action_dim=3)
+        optimizer = torch.optim.Adam(policy.parameters(), lr=0.01)
+
+        dqn = DQN(
+            env=env,
+            network=policy,
+            optimizer=optimizer,
+            gamma=0.99,
+            epsilon=0.1,
+            buffer_size=1000,
+            sample_size=32,
+        )
+        state = torch.rand(1, 10)
+        action = dqn.eps_greedy_policy(state, 0.1)
+        assert action.shape == (1,)
