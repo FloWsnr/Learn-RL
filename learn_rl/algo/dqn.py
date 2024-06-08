@@ -102,32 +102,29 @@ class DQN(AlgoBase):
         self.network.train()
 
         for _ in range(num_episodes):
-            self.env.reset()
-            state = self.env.observation
+            obs, info = self.env.reset()
             done = False
             while not done:
                 ############# Sampling ################
-                action = self.eps_greedy_policy(state, self.eps)
-                self.env.step(action)
+                action = self.eps_greedy_policy(obs, self.eps)
+                next_obs, reward, terminated, truncated, info = self.env.step(action)
 
-                next_state = self.env.observation
-                reward = self.env.reward
-                done = self.env.terminated or self.env.truncated
+                done = terminated or truncated
 
                 self.replay_buffer.push(
-                    state,
+                    obs,
                     action,
                     reward,
-                    next_state,
+                    next_obs,
                     done,
                 )
 
                 ############## Training ###############
                 transitions = self.replay_buffer.sample(self.sample_size)
-                state, action, reward, next_state, done = zip(*transitions)
+                states, actions, rewards, next_states, dones = transitions
 
-                td_target = reward + self.gamma * self.network(next_state).max()
-                td_error = td_target - self.network(state)[action]
+                td_target = rewards + self.gamma * self.network(next_states).max()
+                td_error = td_target - self.network(states)[actions]
 
                 # Update network
                 self.optimizer.zero_grad()
@@ -137,7 +134,7 @@ class DQN(AlgoBase):
                 loss.backward()
                 self.optimizer.step()
 
-                state = next_state
+                obs = next_obs
 
     def save(self, filename):
         pass
