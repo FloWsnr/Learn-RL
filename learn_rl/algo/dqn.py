@@ -71,8 +71,6 @@ class DQN(AlgoBase):
         **kwargs,
     ):
         self.env = env
-        self.num_states = env.state_space_size
-        self.num_actions = env.action_space_size
 
         self.gamma = kwargs.get("gamma", 0.99)
         self.eps = kwargs.get("epsilon", 0.1)
@@ -89,14 +87,16 @@ class DQN(AlgoBase):
     def _td_error(self):
         pass
 
-    def eps_greedy_policy(self, state, epsilon: float):
+    def eps_greedy_policy(self, state, epsilon: float) -> Tensor:
         if torch.rand(1) < epsilon:
             # Random action
-            return torch.randint(self.num_actions, (1,))
+            return torch.randint(self.network.action_dim, (1,))
         else:
             # Optimal action of that state
             with torch.no_grad():
-                return torch.argmax(self.network(state))
+                logits = self.network(state)
+                max_action = torch.argmax(logits)
+                return torch.tensor(max_action)
 
     def train(self, num_episodes: int = 1000):
         self.network.train()

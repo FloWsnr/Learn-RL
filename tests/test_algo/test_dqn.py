@@ -1,6 +1,7 @@
 import torch
 from learn_rl.algo.dqn import ReplayBuffer, DQN, DQN_policy
-from learn_rl.environment.acrobot import AcrobotEnv
+import gymnasium as gym
+from math import prod
 
 
 class TestReplayBuffer:
@@ -45,9 +46,13 @@ class TestDQN_policy:
 
 
 class TestDQN:
-    def test_eps_greedy_policy(self):
-        env = AcrobotEnv(render_mode=None)
-        policy = DQN_policy(state_dim=10, hidden_dim=20, action_dim=3)
+    def test_eps_greedy_policy_rng(self):
+        env = gym.make("Acrobot-v1", render_mode=None)
+        state_shape = env.observation_space.shape
+        state_dim = prod(state_shape)
+        action_dim = env.action_space.n
+
+        policy = DQN_policy(state_dim=state_dim, hidden_dim=20, action_dim=action_dim)
         optimizer = torch.optim.Adam(policy.parameters(), lr=0.01)
 
         dqn = DQN(
@@ -55,10 +60,32 @@ class TestDQN:
             network=policy,
             optimizer=optimizer,
             gamma=0.99,
-            epsilon=0.1,
+            epsilon=1,
             buffer_size=1000,
             sample_size=32,
         )
-        state = torch.rand(1, 10)
-        action = dqn.eps_greedy_policy(state, 0.1)
+        state = torch.rand(state_dim)
+        action = dqn.eps_greedy_policy(state, 1)
         assert action.shape == (1,)
+
+    def test_eps_greedy_policy_greedy(self):
+        env = gym.make("Acrobot-v1", render_mode=None)
+        state_shape = env.observation_space.shape
+        state_dim = prod(state_shape)
+        action_dim = env.action_space.n
+
+        policy = DQN_policy(state_dim=state_dim, hidden_dim=20, action_dim=action_dim)
+        optimizer = torch.optim.Adam(policy.parameters(), lr=0.01)
+
+        dqn = DQN(
+            env=env,
+            network=policy,
+            optimizer=optimizer,
+            gamma=0.99,
+            epsilon=0,
+            buffer_size=1000,
+            sample_size=32,
+        )
+        state = torch.rand(state_dim)
+        action = dqn.eps_greedy_policy(state, 0)
+        assert action_dim > action
