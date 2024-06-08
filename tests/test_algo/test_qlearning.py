@@ -1,10 +1,15 @@
 import numpy as np
+import gymnasium as gym
 from learn_rl.algo.qlearning import QLearning
-from learn_rl.environment.frozenlake import FrozenLakeEnv
 
 
 def test_eps_greedy():
-    env = FrozenLakeEnv()
+    env = gym.make(
+        "FrozenLake-v1",
+        map_name="4x4",
+        is_slippery=False,
+        render_mode=None,
+    )
     qlearning = QLearning(env=env)
     qlearning.q_table = np.array(
         [
@@ -20,13 +25,18 @@ def test_eps_greedy():
     assert qlearning.eps_greedy_policy(2, 0.0) == 2
 
     # Random action
-    assert qlearning.eps_greedy_policy(0, 1.0) in [0, 1, 2]
-    assert qlearning.eps_greedy_policy(1, 1.0) in [0, 1, 2]
-    assert qlearning.eps_greedy_policy(2, 1.0) in [0, 1, 2]
+    assert qlearning.eps_greedy_policy(0, 1.0) in [0, 1, 2, 3]
+    assert qlearning.eps_greedy_policy(1, 1.0) in [0, 1, 2, 3]
+    assert qlearning.eps_greedy_policy(2, 1.0) in [0, 1, 2, 3]
 
 
 def test_update_q_table():
-    env = FrozenLakeEnv()
+    env = gym.make(
+        "FrozenLake-v1",
+        map_name="4x4",
+        is_slippery=False,
+        render_mode=None,
+    )
     qlearning = QLearning(env=env, alpha=0.5, gamma=0.99)
     qlearning.q_table = np.array(
         [
@@ -43,21 +53,31 @@ def test_update_q_table():
 
 
 def test_train():
-    env = FrozenLakeEnv(render_mode=None)
+    env = gym.make(
+        "FrozenLake-v1",
+        map_name="4x4",
+        is_slippery=False,
+        render_mode=None,
+    )
     qlearning = QLearning(env=env, alpha=0.001, gamma=0.999)
     qlearning.train(num_episodes=10000)
     assert True
 
 
 def test_infer():
-    alpha = 0.1
+    alpha = 0.01
     gamma = 0.99
     is_slippery = False
     eps_0 = 1.0
-    eps_decay = 0.99
-    train_episodes = 10000
+    eps_decay = 0.999
+    train_episodes = 100000
 
-    env = FrozenLakeEnv(is_slippery=is_slippery)
+    env = gym.make(
+        "FrozenLake-v1",
+        map_name="4x4",
+        is_slippery=is_slippery,
+        render_mode=None,
+    )
     qlearning = QLearning(
         env=env,
         alpha=alpha,
@@ -67,8 +87,13 @@ def test_infer():
     )
     qlearning.train(num_episodes=train_episodes)
 
-    new_env = FrozenLakeEnv(render_mode=None, is_slippery=is_slippery)
-    qlearning.env = new_env
+    env = gym.make(
+        "FrozenLake-v1",
+        map_name="4x4",
+        is_slippery=is_slippery,
+        render_mode="human",
+    )
+    qlearning.env = env
     qlearning.infer(num_episodes=100)
 
     assert True
