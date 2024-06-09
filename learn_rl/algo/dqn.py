@@ -79,6 +79,7 @@ class DQN(AlgoBase):
 
         self.network = network
         self.optimizer = optimizer
+        self.criterion = torch.nn.MSELoss()
         self.replay_buffer = ReplayBuffer(self.buffer_size)
 
     def _loss(self):
@@ -87,10 +88,24 @@ class DQN(AlgoBase):
     def _td_error(self):
         pass
 
-    def eps_greedy_policy(self, state, epsilon: float) -> Tensor:
+    def _step(self, action: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        next_obs, reward, terminated, truncated, info = self.env.step(action)
+        next_obs = torch.tensor(next_obs)
+        reward = torch.tensor(reward)
+        done = terminated or truncated
+        done = torch.tensor(done)
+        return next_obs, reward, done
+
+    def _reset(self) -> Tensor:
+        obs, info = self.env.reset()
+        obs = torch.tensor(obs)
+        return obs
+
+    def eps_greedy_policy(self, state: Tensor, epsilon: float) -> Tensor:
         if torch.rand(1) < epsilon:
             # Random action
-            return torch.randint(self.network.action_dim, (1,))
+            rng_action = torch.randint(self.network.action_dim, (1,))
+            return rng_action.squeeze(0)
         else:
             # Optimal action of that state
             with torch.no_grad():
@@ -102,14 +117,12 @@ class DQN(AlgoBase):
         self.network.train()
 
         for _ in range(num_episodes):
-            obs, info = self.env.reset()
+            obs = self._reset()
             done = False
             while not done:
                 ############# Sampling ################
                 action = self.eps_greedy_policy(obs, self.eps)
-                next_obs, reward, terminated, truncated, info = self.env.step(action)
-
-                done = terminated or truncated
+                next_obs, reward, done = self._step(action)
 
                 self.replay_buffer.push(
                     obs,
@@ -118,21 +131,26 @@ class DQN(AlgoBase):
                     next_obs,
                     done,
                 )
+                if len(self.replay_buffer.buffer) < self.sample_size:
+                    continue
+                else:
+                    ############## Training ###############
+                    transitions = self.replay_buffer.sample(self.sample_size)
+                    states, actions, rewards, next_states, dones = transitions
 
-                ############## Training ###############
-                transitions = self.replay_buffer.sample(self.sample_size)
-                states, actions, rewards, next_states, dones = transitions
+                    actions_target = self.network(next_states)
+                    Q_target = torch.argmax(actions_target, dim=1)
+                    td_target = rewards + self.gamma * Q_target
 
-                td_target = rewards + self.gamma * self.network(next_states).max()
-                td_error = td_target - self.network(states)[actions]
+                    Q_value = self.network(states)
+                    Q_value = Q_value[:, actions]
 
-                # Update network
-                self.optimizer.zero_grad()
+                    # Update network
+                    loss = self.criterion(Q_value, td_target)
 
-                loss = torch.nn.functional.smooth_l1_loss(td_error)
-
-                loss.backward()
-                self.optimizer.step()
+                    loss.backward()
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()
 
                 obs = next_obs
 

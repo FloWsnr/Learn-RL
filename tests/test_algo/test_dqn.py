@@ -66,7 +66,7 @@ class TestDQN:
         )
         state = torch.rand(state_dim)
         action = dqn.eps_greedy_policy(state, 1)
-        assert action.shape == (1,)
+        assert action.shape == torch.Size([])
 
     def test_eps_greedy_policy_greedy(self):
         env = gym.make("Acrobot-v1", render_mode=None)
@@ -88,4 +88,26 @@ class TestDQN:
         )
         state = torch.rand(state_dim)
         action = dqn.eps_greedy_policy(state, 0)
-        assert action_dim > action
+        assert action.shape == torch.Size([])
+
+
+def test_training():
+    env = gym.make("Acrobot-v1", render_mode=None)
+    state_shape = env.observation_space.shape
+    state_dim = prod(state_shape)
+    action_dim = env.action_space.n
+
+    policy = DQN_policy(state_dim=state_dim, hidden_dim=20, action_dim=action_dim)
+    optimizer = torch.optim.Adam(policy.parameters(), lr=0.01)
+
+    dqn = DQN(
+        env=env,
+        network=policy,
+        optimizer=optimizer,
+        gamma=0.99,
+        epsilon=0.5,
+        buffer_size=1000,
+        sample_size=32,
+    )
+
+    dqn.train(num_episodes=1000)
