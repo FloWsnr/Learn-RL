@@ -1,3 +1,4 @@
+import pytest
 import torch
 from learn_rl.algo.dqn import ReplayBuffer, DQN, DQN_policy
 import gymnasium as gym
@@ -84,15 +85,15 @@ class TestDQN:
             gamma=0.99,
             epsilon=0,
             buffer_size=1000,
-            sample_size=32,
+            batch_size=32,
         )
         state = torch.rand(state_dim)
         action = dqn.eps_greedy_policy(state, 0)
         assert action.shape == torch.Size([])
 
 
-def test_training():
-    env = gym.make("Acrobot-v1", render_mode=None)
+def test_train():
+    env = gym.make("Acrobot-v1", render_mode=None, max_episode_steps=100)
     state_shape = env.observation_space.shape
     state_dim = prod(state_shape)
     action_dim = env.action_space.n
@@ -105,9 +106,37 @@ def test_training():
         network=policy,
         optimizer=optimizer,
         gamma=0.99,
-        epsilon=0.5,
-        buffer_size=1000,
-        sample_size=32,
+        epsilon=0.99,
+        buffer_size=10000,
+        batch_size=32,
+        start_training=100,
+        train_every=4,
     )
 
-    dqn.train(num_episodes=1000)
+    dqn.train(num_episodes=10)
+
+
+@pytest.mark.skip(reason="Not suitable for CI")
+def test_inference():
+    env = gym.make("Acrobot-v1", render_mode=None, max_episode_steps=100)
+    state_shape = env.observation_space.shape
+    state_dim = prod(state_shape)
+    action_dim = env.action_space.n
+
+    policy = DQN_policy(state_dim=state_dim, hidden_dim=20, action_dim=action_dim)
+    optimizer = torch.optim.Adam(policy.parameters(), lr=0.01)
+
+    dqn = DQN(
+        env=env,
+        network=policy,
+        optimizer=optimizer,
+        gamma=0.99,
+        epsilon=0.99,
+        buffer_size=50000,
+        batch_size=128,
+        start_training=100,
+        train_every=4,
+    )
+
+    dqn.train(num_episodes=100)
+    dqn.eval()

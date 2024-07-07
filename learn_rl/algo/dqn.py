@@ -71,22 +71,21 @@ class DQN(AlgoBase):
         **kwargs,
     ):
         self.env = env
+        self.step = 0
 
         self.gamma = kwargs.get("gamma", 0.99)
         self.eps = kwargs.get("epsilon", 0.1)
         self.buffer_size = kwargs.get("buffer_size", 1000)
-        self.sample_size = kwargs.get("sample_size", 32)
+        self.batch_size = kwargs.get("batch_size", 32)
+
+        # Start training at this step
+        self.start_training = kwargs.get("start_training", 100)
+        self.train_every = kwargs.get("train_every", 4)
 
         self.network = network
         self.optimizer = optimizer
         self.criterion = torch.nn.MSELoss()
         self.replay_buffer = ReplayBuffer(self.buffer_size)
-
-    def _loss(self):
-        pass
-
-    def _td_error(self):
-        pass
 
     def _step(self, action: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         next_obs, reward, terminated, truncated, info = self.env.step(action)
@@ -98,8 +97,7 @@ class DQN(AlgoBase):
 
     def _reset(self) -> Tensor:
         obs, info = self.env.reset()
-        obs = torch.tensor(obs)
-        return obs
+        return torch.tensor(obs)
 
     def eps_greedy_policy(self, state: Tensor, epsilon: float) -> Tensor:
         if torch.rand(1) < epsilon:
@@ -111,7 +109,7 @@ class DQN(AlgoBase):
             with torch.no_grad():
                 logits = self.network(state)
                 max_action = torch.argmax(logits)
-                return torch.tensor(max_action)
+                return max_action
 
     def train(self, num_episodes: int = 1000):
         self.network.train()
@@ -131,28 +129,48 @@ class DQN(AlgoBase):
                     next_obs,
                     done,
                 )
-                if len(self.replay_buffer.buffer) < self.sample_size:
+                self.step += 1
+
+                ############# Skip training if ######################
+                if len(self.replay_buffer.buffer) < self.batch_size:
                     continue
-                else:
-                    ############## Training ###############
-                    transitions = self.replay_buffer.sample(self.sample_size)
-                    states, actions, rewards, next_states, dones = transitions
+                if self.step < self.start_training:
+                    continue
 
-                    actions_target = self.network(next_states)
-                    Q_target = torch.argmax(actions_target, dim=1)
-                    td_target = rewards + self.gamma * Q_target
+                if self.step % self.train_every != 0:
+                    continue
+                ############## Training ###############
+                transitions = self.replay_buffer.sample(self.batch_size)
+                states, actions, rewards, next_states, dones = transitions
 
-                    Q_value = self.network(states)
-                    Q_value = Q_value[:, actions]
+                actions = actions.unsqueeze(-1)
+                # Calc Q value of current action
+                Q_value: Tensor = self.network(states)
+                Q_value = Q_value.gather(1, actions)
 
-                    # Update network
-                    loss = self.criterion(Q_value, td_target)
+                actions_target = self.network(next_states)
+                Q_target = torch.argmax(actions_target, dim=1)
+                td_target = rewards + self.gamma * Q_target
+                td_target = td_target.unsqueeze(-1)
 
-                    loss.backward()
-                    self.optimizer.step()
-                    self.optimizer.zero_grad()
+                # Update network
+                loss = self.criterion(Q_value, td_target)
+
+                loss.backward()
+                self.optimizer.step()
+                self.optimizer.zero_grad()
 
                 obs = next_obs
+
+    def eval(self):
+        self.network.eval()
+        obs, _ = self.env.reset()
+        for _ in range(1000):
+            action = self.eps_greedy_policy(obs, 0)
+            next_obs, _, terminated, truncated, _ = self.env.step(action)
+            if terminated or truncated:
+                break
+            obs = next_obs
 
     def save(self, filename):
         pass
