@@ -166,6 +166,7 @@ class DQN(AlgoBase):
         self.network.eval()
         obs, _ = self.env.reset()
         for _ in range(1000):
+            obs = torch.tensor(obs)
             action = self.eps_greedy_policy(obs, 0)
             next_obs, _, terminated, truncated, _ = self.env.step(action)
             if terminated or truncated:
