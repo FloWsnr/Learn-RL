@@ -139,4 +139,9 @@ def test_inference():
     )
 
     dqn.train(num_episodes=100)
+    env = gym.make("Acrobot-v1", render_mode="human", max_episode_steps=100)
+    dqn.env = env
     dqn.eval()
+
+if __name__ == "__main__":
+    test_inference()
