@@ -141,6 +141,7 @@ class DQN(AlgoBase):
             print(f"Episode {i}")
             obs = self._reset()
             done = False
+            episode_loss = 0
             while not done:
                 ############# Sampling ################
                 action = self.eps_greedy_policy(obs, self.eps)
@@ -173,23 +174,25 @@ class DQN(AlgoBase):
                 Q_value = Q_value.gather(1, actions)
 
                 with torch.no_grad():
-                    actions_target = self.target_policy(next_states)
-                    Q_target = torch.argmax(actions_target, dim=1)
-                td_target = rewards + self.gamma * Q_target
+                    Q_target = self.target_policy(next_states)
+                    Q_target, _ = Q_target.max(dim=1)
+                    td_target = rewards + self.gamma * Q_target * (~dones)
                 td_target = td_target.unsqueeze(-1)
 
                 # Update network
                 loss = self.criterion(Q_value, td_target)
-
                 loss.backward()
-                self.optimizer.step()
-                self.optimizer.zero_grad()
+                episode_loss += loss.item()
 
                 # Update target network
                 if self.step % self.target_update_every == 0:
                     self.target_policy.load_state_dict(self.policy.state_dict())
 
                 obs = next_obs
+
+            # Update network once per episode
+            self.optimizer.step()
+            self.optimizer.zero_grad()
 
     def eval(self):
         self.policy.eval()
