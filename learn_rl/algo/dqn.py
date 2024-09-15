@@ -19,6 +19,8 @@ class DQN_policy(torch.nn.Module):
         self.model = torch.nn.Sequential(
             torch.nn.Linear(self.state_dim, self.hidden_dim),
             torch.nn.ReLU(),
+            torch.nn.Linear(self.hidden_dim, self.hidden_dim),
+            torch.nn.ReLU(),
             torch.nn.Linear(self.hidden_dim, self.action_dim),
         )
 
@@ -70,15 +72,21 @@ class DQN(AlgoBase):
     def __init__(
         self,
         env: Environment,
-        network: DQN_policy,
+        policy: DQN_policy,
+        target_policy: DQN_policy,
         optimizer: torch.optim.Optimizer,
+        device: str = "cpu",
         **kwargs,
     ):
+        self.device = device
+        torch.set_default_device(self.device)
         self.env = env
         self.step = 0
 
         self.gamma = kwargs.get("gamma", 0.99)
         self.eps = kwargs.get("epsilon", 0.1)
+        self.eps_min = kwargs.get("eps_min", 0.1)
+        self.eps_reduce_steps = kwargs.get("eps_reduce_steps", 5000)
         self.buffer_size = kwargs.get("buffer_size", 1000)
         self.batch_size = kwargs.get("batch_size", 32)
 
@@ -86,10 +94,17 @@ class DQN(AlgoBase):
         self.start_training = kwargs.get("start_training", 100)
         self.train_every = kwargs.get("train_every", 4)
 
-        self.network = network
+        self.policy = policy
+        self.target_policy = target_policy
         self.optimizer = optimizer
         self.criterion = torch.nn.MSELoss()
         self.replay_buffer = ReplayBuffer(self.buffer_size)
+
+        self.target_update_every = kwargs.get("target_update_every", 250)
+
+        # Move to device
+        self.policy.to(self.device)
+        self.target_policy.to(self.device)
 
     def _step(self, action: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         next_obs, reward, terminated, truncated, info = self.env.step(action)
@@ -106,19 +121,24 @@ class DQN(AlgoBase):
     def eps_greedy_policy(self, state: Tensor, epsilon: float) -> Tensor:
         if torch.rand(1) < epsilon:
             # Random action
-            rng_action = torch.randint(self.network.action_dim, (1,))
+            rng_action = torch.randint(self.policy.action_dim, (1,))
             return rng_action.squeeze(0)
         else:
             # Optimal action of that state
             with torch.no_grad():
-                logits = self.network(state)
+                logits = self.policy(state)
                 max_action = torch.argmax(logits)
                 return max_action
 
-    def train(self, num_episodes: int = 1000):
-        self.network.train()
+    def _reduce_eps(self):
+        reduced_eps = self.eps - (self.eps - self.eps_min) / self.eps_reduce_steps
+        self.eps = max(reduced_eps, self.eps_min)
 
-        for _ in range(num_episodes):
+    def train(self, num_episodes: int = 1000):
+        self.policy.train()
+
+        for i in range(num_episodes):
+            print(f"Episode {i}")
             obs = self._reset()
             done = False
             while not done:
@@ -134,7 +154,7 @@ class DQN(AlgoBase):
                     done,
                 )
                 self.step += 1
-
+                self._reduce_eps()
                 ############# Skip training if ######################
                 if len(self.replay_buffer.buffer) < self.batch_size:
                     continue
@@ -149,11 +169,12 @@ class DQN(AlgoBase):
 
                 actions = actions.unsqueeze(-1)
                 # Calc Q value of current action
-                Q_value: Tensor = self.network(states)
+                Q_value: Tensor = self.policy(states)
                 Q_value = Q_value.gather(1, actions)
 
-                actions_target = self.network(next_states)
-                Q_target = torch.argmax(actions_target, dim=1)
+                with torch.no_grad():
+                    actions_target = self.target_policy(next_states)
+                    Q_target = torch.argmax(actions_target, dim=1)
                 td_target = rewards + self.gamma * Q_target
                 td_target = td_target.unsqueeze(-1)
 
@@ -164,10 +185,14 @@ class DQN(AlgoBase):
                 self.optimizer.step()
                 self.optimizer.zero_grad()
 
+                # Update target network
+                if self.step % self.target_update_every == 0:
+                    self.target_policy.load_state_dict(self.policy.state_dict())
+
                 obs = next_obs
 
     def eval(self):
-        self.network.eval()
+        self.policy.eval()
         obs, _ = self.env.reset()
         for _ in range(1000):
             obs = torch.tensor(obs)

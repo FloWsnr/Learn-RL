@@ -7,11 +7,11 @@ from math import prod
 
 class TestReplayBuffer:
     def test_push(self):
-        state = 1
-        action = 2
-        reward = 3
-        next_state = 4
-        done = 5
+        state = torch.rand(1, 10)
+        action = torch.rand(1, 1)
+        reward = torch.rand(1, 1)
+        next_state = torch.rand(1, 10)
+        done = True
         buffer = ReplayBuffer(2)
         buffer.push(state, action, reward, next_state, done)
         assert len(buffer.buffer) == 1
@@ -58,7 +58,7 @@ class TestDQN:
 
         dqn = DQN(
             env=env,
-            network=policy,
+            policy=policy,
             optimizer=optimizer,
             gamma=0.99,
             epsilon=1,
@@ -80,7 +80,7 @@ class TestDQN:
 
         dqn = DQN(
             env=env,
-            network=policy,
+            policy=policy,
             optimizer=optimizer,
             gamma=0.99,
             epsilon=0,
@@ -99,18 +99,26 @@ def test_train():
     action_dim = env.action_space.n
 
     policy = DQN_policy(state_dim=state_dim, hidden_dim=20, action_dim=action_dim)
+    target_policy = DQN_policy(
+        state_dim=state_dim, hidden_dim=20, action_dim=action_dim
+    )
+    target_policy.load_state_dict(policy.state_dict())
     optimizer = torch.optim.Adam(policy.parameters(), lr=0.01)
 
     dqn = DQN(
         env=env,
-        network=policy,
+        policy=policy,
+        target_policy=target_policy,
         optimizer=optimizer,
         gamma=0.99,
         epsilon=0.99,
+        eps_min=0.1,
+        eps_reduce_steps=5000,
         buffer_size=10000,
         batch_size=32,
         start_training=100,
         train_every=4,
+        target_update_every=250,
     )
 
     dqn.train(num_episodes=10)
@@ -118,30 +126,41 @@ def test_train():
 
 @pytest.mark.skip(reason="Not suitable for CI")
 def test_inference():
-    env = gym.make("Acrobot-v1", render_mode=None, max_episode_steps=100)
+    env = gym.make("Acrobot-v1", render_mode=None)
     state_shape = env.observation_space.shape
     state_dim = prod(state_shape)
     action_dim = env.action_space.n
 
-    policy = DQN_policy(state_dim=state_dim, hidden_dim=20, action_dim=action_dim)
-    optimizer = torch.optim.Adam(policy.parameters(), lr=0.01)
+    policy = DQN_policy(state_dim=state_dim, hidden_dim=256, action_dim=action_dim)
+    optimizer = torch.optim.Adam(policy.parameters(), lr=6.3e-4)
+
+    target_policy = DQN_policy(
+        state_dim=state_dim, hidden_dim=256, action_dim=action_dim
+    )
+    target_policy.load_state_dict(policy.state_dict())
 
     dqn = DQN(
         env=env,
-        network=policy,
+        policy=policy,
+        target_policy=target_policy,
         optimizer=optimizer,
         gamma=0.99,
         epsilon=0.99,
+        eps_min=0.1,
+        eps_reduce_steps=10000,
         buffer_size=50000,
         batch_size=128,
-        start_training=100,
+        start_training=0,
         train_every=4,
+        target_update_every=250,
+        device="cpu",
     )
 
-    dqn.train(num_episodes=100)
+    dqn.train(num_episodes=1000)
     env = gym.make("Acrobot-v1", render_mode="human", max_episode_steps=100)
     dqn.env = env
     dqn.eval()
+
 
 if __name__ == "__main__":
     test_inference()
