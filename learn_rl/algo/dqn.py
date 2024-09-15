@@ -47,12 +47,16 @@ class ReplayBuffer:
         experience = self.Experience(state, action, reward, next_state, done)
         self.buffer.append(experience)
 
-    def sample(self, batch_size: int) -> tuple[torch.Tensor]:
+    def sample(
+        self, batch_size: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         rand_indices = torch.randint(len(self.buffer), size=(batch_size,))
         transitions = [self.buffer[index] for index in rand_indices]
         return self._transitions_to_tensors(transitions)
 
-    def _transitions_to_tensors(self, transition: list[tuple]) -> tuple[torch.Tensor]:
+    def _transitions_to_tensors(
+        self, transition: list[tuple]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         states, actions, rewards, next_states, dones = zip(*transition)
         states = torch.stack(states, dim=0)
         actions = torch.stack(actions, dim=0)
