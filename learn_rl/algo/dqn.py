@@ -75,6 +75,7 @@ class DQN(AlgoBase):
         policy: DQN_policy,
         target_policy: DQN_policy,
         optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler.LRScheduler | None,
         device: str = "cpu",
         **kwargs,
     ):
@@ -82,11 +83,15 @@ class DQN(AlgoBase):
         torch.set_default_device(self.device)
         self.env = env
         self.step = 0
+        self.total_steps = 0
 
-        self.gamma = kwargs.get("gamma", 0.99)
-        self.eps = kwargs.get("epsilon", 0.1)
+        self.gamma = kwargs.get("gamma", 0.99)  # Discount factor
+        self.eps = kwargs.get("epsilon", 0.1)  # Epsilon for epsilon-greedy policy
+        self.eps_start = self.eps
         self.eps_min = kwargs.get("eps_min", 0.1)
-        self.eps_reduce_steps = kwargs.get("eps_reduce_steps", 5000)
+        self.eps_reduce = kwargs.get(
+            "eps_reduce", 0.4
+        )  # Fraction of episodes to reduce epsilon to eps_min
         self.buffer_size = kwargs.get("buffer_size", 1000)
         self.batch_size = kwargs.get("batch_size", 32)
 
@@ -97,6 +102,7 @@ class DQN(AlgoBase):
         self.policy = policy
         self.target_policy = target_policy
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.criterion = torch.nn.MSELoss()
         self.replay_buffer = ReplayBuffer(self.buffer_size)
 
@@ -131,18 +137,26 @@ class DQN(AlgoBase):
                 return max_action
 
     def _reduce_eps(self):
-        reduced_eps = self.eps - (self.eps - self.eps_min) / self.eps_reduce_steps
-        self.eps = max(reduced_eps, self.eps_min)
+        """Reduce epsilon linearly until steps = total steps * eps_reduce is reached"""
+        #
+        step_range = int(self.total_steps * self.eps_reduce)
 
-    def train(self, num_episodes: int = 1000):
+        if self.step < step_range:
+            self.eps = (
+                self.eps_start
+                + (self.eps_min - self.eps_start) / step_range * self.step
+            )
+
+    def train(self, total_steps: int):
         self.policy.train()
-
-        for i in range(num_episodes):
-            print(f"Episode {i}")
+        self.total_steps = total_steps
+        run = self.step < self.total_steps
+        while run:
+            self._report()
             obs = self._reset()
             done = False
             episode_loss = 0
-            while not done:
+            while not done and run:
                 ############# Sampling ################
                 action = self.eps_greedy_policy(obs, self.eps)
                 next_obs, reward, done = self._step(action)
@@ -189,21 +203,31 @@ class DQN(AlgoBase):
                     self.target_policy.load_state_dict(self.policy.state_dict())
 
                 obs = next_obs
+                # Update network once per episode
+                self.optimizer.step()
+                self.optimizer.zero_grad()
 
-            # Update network once per episode
-            self.optimizer.step()
-            self.optimizer.zero_grad()
+                run = self.step < total_steps
+
+            if self.scheduler is not None:
+                # Update learning rate after each episode
+                self.scheduler.step()
+
+    def _report(self):
+        print(f"Step {self.step}")
+        print(f"  Epsilon {self.eps}")
 
     def eval(self):
         self.policy.eval()
-        obs, _ = self.env.reset()
-        for _ in range(1000):
-            obs = torch.tensor(obs)
-            action = self.eps_greedy_policy(obs, 0)
-            next_obs, _, terminated, truncated, _ = self.env.step(action)
-            if terminated or truncated:
-                break
-            obs = next_obs
+        while True:
+            obs, _ = self.env.reset()
+            while True:
+                obs = torch.tensor(obs)
+                action = self.eps_greedy_policy(obs, 0)
+                next_obs, _, terminated, truncated, _ = self.env.step(action)
+                if terminated or truncated:
+                    break
+                obs = next_obs
 
     def save(self, filename):
         pass

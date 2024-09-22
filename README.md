@@ -1,5 +1,5 @@
 # Learn-RL
-Implementation of some RL algorithms from scratch
+Implementation of some RL algorithms from scratch. Not optimized for performance, just for educational purposes.
 
 ## Installation
 
@@ -7,6 +7,11 @@ Implementation of some RL algorithms from scratch
 poetry install
 ```
 
+## Algorithms
+
+- Q-learning
+- DQN
+- PPO
 
 ## Resources
 

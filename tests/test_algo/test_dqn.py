@@ -132,8 +132,7 @@ def test_inference():
     action_dim = env.action_space.n
 
     policy = DQN_policy(state_dim=state_dim, hidden_dim=256, action_dim=action_dim)
-    optimizer = torch.optim.Adam(policy.parameters(), lr=6.3e-4)
-
+    optimizer = torch.optim.Adam(policy.parameters(), lr=0.001)
     target_policy = DQN_policy(
         state_dim=state_dim, hidden_dim=256, action_dim=action_dim
     )
@@ -144,20 +143,22 @@ def test_inference():
         policy=policy,
         target_policy=target_policy,
         optimizer=optimizer,
+        scheduler=None,
         gamma=0.99,
         epsilon=0.99,
         eps_min=0.1,
-        eps_reduce_steps=10000,
+        eps_reduce=0.2,
         buffer_size=50000,
         batch_size=128,
-        start_training=0,
+        start_training=1000,
         train_every=4,
         target_update_every=250,
         device="cpu",
     )
 
-    dqn.train(num_episodes=1000)
-    env = gym.make("Acrobot-v1", render_mode="human", max_episode_steps=500)
+    dqn.train(total_steps=100000)
+    input("Press Enter to continue...")
+    env = gym.make("Acrobot-v1", render_mode="human", max_episode_steps=1000)
     dqn.env = env
     dqn.eval()
 
